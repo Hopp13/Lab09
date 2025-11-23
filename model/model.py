@@ -11,7 +11,7 @@ class Model:
         self._valore_ottimo: int = -1
         self._costo = 0
 
-        # TODO: Aggiungere eventuali altri attributi
+        self.tour_dao = TourDAO()
 
         # Caricamento
         self.load_tour()
@@ -39,9 +39,17 @@ class Model:
             --> Ogni Attrazione ha un set di Tour.
         """
 
-        # TODO
+        tour_attrazione = self.tour_dao.get_tour_attrazioni()
 
-    def genera_pacchetto(self, id_regione: str, max_giorni: int = None, max_budget: float = None):
+        for coppia in tour_attrazione:
+            for tour in self.tour_map:
+                if tour == coppia["id_tour"]:
+                    self.tour_map[tour].attrazioni.add(coppia["id_attrazione"])
+            for attrazione in self.attrazioni_map:
+                if attrazione == coppia["id_attrazione"]:
+                    self.attrazioni_map[attrazione].tour.add(coppia["id_tour"])
+
+    def genera_pacchetto(self, id_regione, max_giorni, max_budget):
         """
         Calcola il pacchetto turistico ottimale per una regione rispettando i vincoli di durata, budget e attrazioni uniche.
         :param id_regione: id della regione
@@ -56,11 +64,48 @@ class Model:
         self._costo = 0
         self._valore_ottimo = -1
 
-        # TODO
+        self._ricorsione(id_regione, max_giorni, max_budget, [], 0, 0, 0, set())
 
         return self._pacchetto_ottimo, self._costo, self._valore_ottimo
 
-    def _ricorsione(self, start_index: int, pacchetto_parziale: list, durata_corrente: int, costo_corrente: float, valore_corrente: int, attrazioni_usate: set):
-        """ Algoritmo di ricorsione che deve trovare il pacchetto che massimizza il valore culturale"""
+    @staticmethod
+    def tour_accettabile(tour, attrazioni_usate):
+        for attrazione in tour.attrazioni:
+            if attrazione in attrazioni_usate:
+                return False
+        return True
 
-        # TODO: è possibile cambiare i parametri formali della funzione se ritenuto opportuno
+    def _ricorsione(self, id_regione, max_giorni, max_budget, pacchetto_parziale: list, durata_corrente: int, costo_corrente: float, valore_corrente: int, attrazioni_usate: set):
+        """ Algoritmo di ricorsione che deve trovare il pacchetto che massimizza il valore culturale"""
+        for tour in self.tour_map:
+            tour = self.tour_map[tour]
+            if tour.id_regione == id_regione:
+                if durata_corrente + tour.durata_giorni <= max_giorni and costo_corrente + tour.costo <= max_budget:
+                    if self.tour_accettabile(tour, attrazioni_usate):
+                        pacchetto_parziale.append(tour)
+                        valore_aggiunto = 0
+                        for attrazione in tour.attrazioni:
+                            attrazione = self.attrazioni_map[attrazione]
+                            valore_aggiunto += attrazione.valore_culturale
+                            attrazioni_usate.add(attrazione.id)
+                        if valore_corrente + valore_aggiunto == self._valore_ottimo:
+                            self._pacchetto_ottimo.append(pacchetto_parziale)
+                        if valore_corrente + valore_aggiunto > self._valore_ottimo:
+                            self._pacchetto_ottimo= []
+                            self._valore_ottimo = valore_corrente + valore_aggiunto
+                            self._pacchetto_ottimo.append(pacchetto_parziale)
+                        self._ricorsione(id_regione,
+                                         max_giorni,
+                                         max_budget,
+                                         pacchetto_parziale,
+                                         durata_corrente + tour.durata_giorni,
+                                         costo_corrente + tour.costo,
+                                         valore_corrente + valore_aggiunto,
+                                         attrazioni_usate)
+                        pacchetto_parziale.pop()
+                        durata_corrente -= tour.durata_giorni
+                        costo_corrente -= tour.costo
+                        valore_corrente -= valore_aggiunto
+                        for attrazione in tour.attrazioni:
+                            attrazione = self.attrazioni_map[attrazione]
+                            attrazioni_usate.remove(attrazione.id)
